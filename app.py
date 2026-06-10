@@ -245,12 +245,12 @@ elif menu == "🔮 Simulator Prediksi":
         with col1:
             job_title = st.selectbox("Posisi Jabatan", sorted(df_raw['job_title'].unique()))
             experience = st.slider("Pengalaman Kerja (Tahun)", 0, 20, 5)
-            education = st.selectbox("Tingkat Pendidikan", sorted(df_raw['education_level'].unique()))
+            education = st.selectbox("Tingkat Pendidikan", ['High School', 'Diploma', 'Bachelor', 'Master', 'PhD'])
 
         with col2:
             skills = st.number_input("Jumlah Skills", 1, 20, 5)
             industry = st.selectbox("Industri", sorted(df_raw['industry'].unique()))
-            company_size = st.selectbox("Ukuran Perusahaan", sorted(df_raw['company_size'].unique()))
+            company_size = st.selectbox("Ukuran Perusahaan", ['Startup', 'Small', 'Medium', 'Large', 'Enterprise'])
 
         submit_btn = st.form_submit_button("🔍 Hitung Prediksi", use_container_width=True)
 
