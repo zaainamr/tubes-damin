@@ -253,6 +253,17 @@ elif menu == "🔮 Simulator Prediksi":
         })
 
         # Apply preprocessing
+        # 1. Ordinal Encoding
+        input_data[['education_level', 'company_size']] = ordinal_enc_obj.transform(
+            input_data[['education_level', 'company_size']]
+        )
+
+        # 2. Feature Scaling
+        numerical_cols_to_scale = ['experience_years', 'skills_count', 'certifications', 
+                                   'education_level', 'company_size']
+        input_data[numerical_cols_to_scale] = scaler_obj.transform(input_data[numerical_cols_to_scale])
+
+        # 3. One-hot encoding
         input_processed = pd.get_dummies(input_data, columns=['job_title', 'industry', 'location', 'remote_work'], 
                                         drop_first=True, dtype=int)
 
