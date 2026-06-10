@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 .streamlit/secrets.toml
+DEPLOYMENT_GUIDE.md
+FILES_CHECKLIST.md
+QUICK_REFERENCE.md
+SETUP_SUMMARY.md

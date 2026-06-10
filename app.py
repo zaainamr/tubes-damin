@@ -103,7 +103,7 @@ def train_all_models(df_raw, df_processed):
     X_cluster_scaled = scaler_cluster.fit_transform(X_cluster)
 
     # K-Means Clustering
-    kmeans_model = KMeans(n_clusters=3, random_state=42, n_init=10)
+    kmeans_model = KMeans(n_clusters=2, random_state=42, n_init=10)
     cluster_labels = kmeans_model.fit_predict(X_cluster_scaled)
     df_raw['cluster'] = cluster_labels
 
@@ -126,14 +126,12 @@ kmeans_model, model_lr, model_rf, scaler_cluster, df_with_clusters = train_all_m
 
 # Calculate mapping dynamically based on average experience of each cluster
 cluster_exp = df_with_clusters.groupby('cluster')['experience_years'].mean().sort_values()
-# Rank 0 -> Entry Level (lowest average experience)
-# Rank 1 -> Mid-Level (middle average experience)
-# Rank 2 -> Senior/Expert (highest average experience)
+# Rank 0 -> Junior (lowest average experience)
+# Rank 1 -> Senior (highest average experience)
 cluster_mapping = {cluster_id: rank for rank, cluster_id in enumerate(cluster_exp.index)}
 cluster_names = {
-    0: "Entry Level",
-    1: "Mid-Level",
-    2: "Senior/Expert"
+    0: "Junior",
+    1: "Senior"
 }
 
 # ============================================================================
@@ -164,7 +162,7 @@ if menu == "📊 Beranda":
         st.markdown(f'<div class="metric-card"><div class="metric-label">Gaji Tertinggi</div><div class="metric-value">${df_raw["salary"].max():,.0f}</div></div>', 
                    unsafe_allow_html=True)
     with col4:
-        st.markdown(f'<div class="metric-card"><div class="metric-label">Jumlah Cluster</div><div class="metric-value">3</div></div>', 
+        st.markdown(f'<div class="metric-card"><div class="metric-label">Jumlah Cluster</div><div class="metric-value">2</div></div>', 
                    unsafe_allow_html=True)
 
     st.subheader("📌 Fitur Utama")
@@ -172,7 +170,7 @@ if menu == "📊 Beranda":
     with col_a:
         st.info("**Analisis EDA** - Eksplorasi pola data dan korelasi gaji dengan variabel lainnya")
     with col_b:
-        st.warning("**Clustering K-Means** - Segmentasi karyawan berdasarkan 3 cluster dengan karakteristik berbeda")
+        st.warning("**Clustering K-Means** - Segmentasi karyawan berdasarkan 2 cluster: Junior dan Senior")
     with col_c:
         st.success("**Simulator AI** - Prediksi gaji real-time dan klasifikasi cluster untuk profil karyawan baru")
 
@@ -208,11 +206,11 @@ elif menu == "📈 Analisis Data":
 # ============================================================================
 elif menu == "🎯 Clustering":
     st.title("Segmentasi Karyawan (K-Means Clustering)")
-    st.markdown("Karyawan dikelompokkan menjadi 3 cluster berdasarkan pengalaman, skill, sertifikasi, dan gaji.")
+    st.markdown("Karyawan dikelompokkan menjadi **2 cluster** (Junior & Senior) berdasarkan pengalaman, skill, sertifikasi, dan gaji.")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
-    # Sort the cluster IDs by experience (rank 0, 1, 2)
+    # Sort the cluster IDs by experience (rank 0=Junior, 1=Senior)
     sorted_cluster_ids = list(cluster_exp.index)
 
     for rank, cluster_id in enumerate(sorted_cluster_ids):
@@ -221,7 +219,7 @@ elif menu == "🎯 Clustering":
         avg_salary = cluster_data['salary'].mean()
         avg_exp = cluster_data['experience_years'].mean()
 
-        with [col1, col2, col3][rank]:
+        with [col1, col2][rank]:
             st.metric(cluster_names[rank], f"{cluster_size:,} Karyawan", f"Avg: ${avg_salary:,.0f}")
             st.caption(f"Pengalaman rata-rata: {avg_exp:.1f} tahun")
 
@@ -231,7 +229,7 @@ elif menu == "🎯 Clustering":
     cluster_profiles = df_with_clusters.groupby('cluster')[['experience_years', 'skills_count', 'certifications', 'salary']].mean().round(2)
     # Map raw cluster ID index to level name
     cluster_profiles['level'] = cluster_profiles.index.map(lambda x: cluster_names[cluster_mapping[x]])
-    cluster_profiles = cluster_profiles.set_index('level').loc[["Entry Level", "Mid-Level", "Senior/Expert"]]
+    cluster_profiles = cluster_profiles.set_index('level').loc[["Junior", "Senior"]]
     st.dataframe(cluster_profiles)
 
 # ============================================================================
@@ -310,11 +308,10 @@ elif menu == "🔮 Simulator Prediksi":
             rank = cluster_mapping[cluster_pred]
             st.metric("🎯 Klasifikasi Level", cluster_names[rank])
 
-        cluster_desc = [
-            "**Entry Level** - Tenaga muda dengan pengalaman terbatas",
-            "**Mid-Level** - Profesional berpengalaman dengan kompetensi standar",
-            "**Senior/Expert** - Spesialis senior dengan pengalaman ekstensif"
-        ]
+        cluster_desc = {
+            0: "**Junior** — Karyawan dengan pengalaman dan kompensasi yang masih berkembang",
+            1: "**Senior** — Karyawan berpengalaman dengan kompensasi tinggi"
+        }
         st.info(cluster_desc[rank])
 
 # ============================================================================
@@ -343,7 +340,7 @@ elif menu == "ℹ️ Dokumentasi":
 
         | Model | Tujuan | Performa |
         |-------|--------|----------|
-        | K-Means (k=3) | Segmentasi Karyawan | Silhouette Score: Optimal |
+        | K-Means (k=2) | Segmentasi Karyawan | Silhouette Score: Optimal |
         | Linear Regression | Prediksi Salary | R² Score: 0.85+ |
         | Random Forest | Klasifikasi Cluster | Accuracy: 88%+ |
         """)
