@@ -124,18 +124,6 @@ def train_all_models(df_raw, df_processed):
 
 kmeans_model, model_lr, model_rf, scaler_cluster, df_with_clusters = train_all_models(df_raw, df_processed)
 
-# Calculate mapping dynamically based on average experience of each cluster
-cluster_exp = df_with_clusters.groupby('cluster')['experience_years'].mean().sort_values()
-# Rank 0 -> Entry Level (lowest average experience)
-# Rank 1 -> Mid-Level (middle average experience)
-# Rank 2 -> Senior/Expert (highest average experience)
-cluster_mapping = {cluster_id: rank for rank, cluster_id in enumerate(cluster_exp.index)}
-cluster_names = {
-    0: "Entry Level",
-    1: "Mid-Level",
-    2: "Senior/Expert"
-}
-
 # ============================================================================
 # SIDEBAR NAVIGATION
 # ============================================================================
@@ -212,26 +200,20 @@ elif menu == "🎯 Clustering":
 
     col1, col2, col3 = st.columns(3)
 
-    # Sort the cluster IDs by experience (rank 0, 1, 2)
-    sorted_cluster_ids = list(cluster_exp.index)
-
-    for rank, cluster_id in enumerate(sorted_cluster_ids):
+    for cluster_id in range(3):
         cluster_data = df_with_clusters[df_with_clusters['cluster'] == cluster_id]
         cluster_size = len(cluster_data)
         avg_salary = cluster_data['salary'].mean()
         avg_exp = cluster_data['experience_years'].mean()
 
-        with [col1, col2, col3][rank]:
-            st.metric(cluster_names[rank], f"{cluster_size:,} Karyawan", f"Avg: ${avg_salary:,.0f}")
+        with [col1, col2, col3][cluster_id]:
+            st.metric(f"Cluster {cluster_id}", f"{cluster_size:,} Karyawan", f"Avg: ${avg_salary:,.0f}")
             st.caption(f"Pengalaman rata-rata: {avg_exp:.1f} tahun")
 
     st.divider()
     st.subheader("Profil Rata-Rata per Cluster")
 
     cluster_profiles = df_with_clusters.groupby('cluster')[['experience_years', 'skills_count', 'certifications', 'salary']].mean().round(2)
-    # Map raw cluster ID index to level name
-    cluster_profiles['level'] = cluster_profiles.index.map(lambda x: cluster_names[cluster_mapping[x]])
-    cluster_profiles = cluster_profiles.set_index('level').loc[["Entry Level", "Mid-Level", "Senior/Expert"]]
     st.dataframe(cluster_profiles)
 
 # ============================================================================
@@ -281,9 +263,9 @@ elif menu == "🔮 Simulator Prediksi":
                                    'education_level', 'company_size']
         input_data[numerical_cols_to_scale] = scaler_obj.transform(input_data[numerical_cols_to_scale])
 
-        # 3. One-hot encoding
+        # 3. One-Hot Encoding
         input_processed = pd.get_dummies(input_data, columns=['job_title', 'industry', 'location', 'remote_work'], 
-                                        drop_first=True, dtype=int)
+                                         drop_first=True, dtype=int)
 
         # Ensure columns match training data
         for col in df_processed.columns:
@@ -306,16 +288,14 @@ elif menu == "🔮 Simulator Prediksi":
                      delta=f"vs Rata-rata: ${df_raw['salary'].mean():,.0f}")
 
         with res_col2:
-            # Map predicted cluster ID to its rank name
-            rank = cluster_mapping[cluster_pred]
-            st.metric("🎯 Klasifikasi Level", cluster_names[rank])
+            st.metric("🎯 Klasifikasi Cluster", f"Cluster {cluster_pred}")
 
         cluster_desc = [
             "**Entry Level** - Tenaga muda dengan pengalaman terbatas",
             "**Mid-Level** - Profesional berpengalaman dengan kompetensi standar",
             "**Senior/Expert** - Spesialis senior dengan pengalaman ekstensif"
         ]
-        st.info(cluster_desc[rank])
+        st.info(cluster_desc[cluster_pred])
 
 # ============================================================================
 # PAGE: DOKUMENTASI
