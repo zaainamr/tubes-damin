@@ -137,16 +137,28 @@ cluster_names = {
 # ============================================================================
 # SIDEBAR NAVIGATION
 # ============================================================================
-st.sidebar.title("🎯 HR Analytics Engine")
-menu = st.sidebar.radio(
-    "Pilih Menu:",
-    ["📊 Beranda", "📈 Analisis Data", "🎯 Clustering", "🔮 Simulator Prediksi", "ℹ️ Dokumentasi"]
-)
+from streamlit_option_menu import option_menu
+
+with st.sidebar:
+    st.markdown('<h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 20px; color: #1E88E5;">HR Analytics Engine</h2>', unsafe_allow_html=True)
+    menu = option_menu(
+        menu_title=None,
+        options=["Beranda", "Analisis Data", "Clustering", "Simulator Prediksi", "Dokumentasi"],
+        icons=["house", "bar-chart-line", "diagram-3", "cpu", "info-circle"],
+        menu_icon="cast",
+        default_index=0,
+        styles={
+            "container": {"padding": "0px", "background-color": "transparent"},
+            "icon": {"color": "#1E88E5", "font-size": "16px"},
+            "nav-link": {"font-size": "14px", "text-align": "left", "margin": "0px", "--hover-color": "#f1f3f5"},
+            "nav-link-selected": {"background-color": "#1E88E5", "color": "white"},
+        }
+    )
 
 # ============================================================================
 # PAGE: BERANDA
 # ============================================================================
-if menu == "📊 Beranda":
+if menu == "Beranda":
     st.title("Dashboard Analisis & Prediksi Gaji Karyawan")
     st.markdown("Sistem analitik berbasis machine learning untuk segmentasi, prediksi, dan optimalisasi kompensasi karyawan.")
     st.divider()
@@ -165,7 +177,7 @@ if menu == "📊 Beranda":
         st.markdown(f'<div class="metric-card"><div class="metric-label">Jumlah Cluster</div><div class="metric-value">2</div></div>', 
                    unsafe_allow_html=True)
 
-    st.subheader("📌 Fitur Utama")
+    st.subheader("Fitur Utama")
     col_a, col_b, col_c = st.columns(3)
     with col_a:
         st.info("**Analisis EDA** - Eksplorasi pola data dan korelasi gaji dengan variabel lainnya")
@@ -177,7 +189,7 @@ if menu == "📊 Beranda":
 # ============================================================================
 # PAGE: ANALISIS DATA (EDA)
 # ============================================================================
-elif menu == "📈 Analisis Data":
+elif menu == "Analisis Data":
     st.title("Eksplorasi Data Deskriptif (EDA)")
 
     col1, col2 = st.columns(2)
@@ -204,7 +216,7 @@ elif menu == "📈 Analisis Data":
 # ============================================================================
 # PAGE: CLUSTERING
 # ============================================================================
-elif menu == "🎯 Clustering":
+elif menu == "Clustering":
     st.title("Segmentasi Karyawan (K-Means Clustering)")
     st.markdown("Karyawan dikelompokkan menjadi **2 cluster** (Junior & Senior) berdasarkan pengalaman, skill, sertifikasi, dan gaji.")
 
@@ -235,7 +247,7 @@ elif menu == "🎯 Clustering":
 # ============================================================================
 # PAGE: SIMULATOR PREDIKSI
 # ============================================================================
-elif menu == "🔮 Simulator Prediksi":
+elif menu == "Simulator Prediksi":
     st.title("Simulator Prediksi Gaji & Klasifikasi")
     st.markdown("Masukkan data profil karyawan untuk mendapatkan estimasi gaji dan klasifikasi cluster.")
 
@@ -252,7 +264,7 @@ elif menu == "🔮 Simulator Prediksi":
             industry = st.selectbox("Industri", sorted(df_raw['industry'].unique()))
             company_size = st.selectbox("Ukuran Perusahaan", ['Startup', 'Small', 'Medium', 'Large', 'Enterprise'])
 
-        submit_btn = st.form_submit_button("🔍 Hitung Prediksi", use_container_width=True)
+        submit_btn = st.form_submit_button("Hitung Prediksi", use_container_width=True)
 
     if submit_btn:
         # Prepare feature untuk prediksi
@@ -296,17 +308,17 @@ elif menu == "🔮 Simulator Prediksi":
 
         # Display results
         st.divider()
-        st.subheader("📊 Hasil Prediksi")
+        st.subheader("Hasil Prediksi")
 
         res_col1, res_col2 = st.columns(2)
         with res_col1:
-            st.metric("💰 Estimasi Gaji", f"${salary_pred:,}/tahun", 
+            st.metric("Estimasi Gaji", f"${salary_pred:,}/tahun", 
                      delta=f"vs Rata-rata: ${df_raw['salary'].mean():,.0f}")
 
         with res_col2:
             # Map predicted cluster ID to its rank name
             rank = cluster_mapping[cluster_pred]
-            st.metric("🎯 Klasifikasi Level", cluster_names[rank])
+            st.metric("Klasifikasi Level", cluster_names[rank])
 
         cluster_desc = {
             0: "**Junior** — Karyawan dengan pengalaman dan kompensasi yang masih berkembang",
@@ -317,14 +329,14 @@ elif menu == "🔮 Simulator Prediksi":
 # ============================================================================
 # PAGE: DOKUMENTASI
 # ============================================================================
-elif menu == "ℹ️ Dokumentasi":
+elif menu == "Dokumentasi":
     st.title("Dokumentasi Sistem")
 
     tab1, tab2, tab3 = st.tabs(["Metodologi", "Model", "Data"])
 
     with tab1:
         st.markdown("""
-        ### 📋 Metodologi CRISP-DM
+        ### Metodologi CRISP-DM
 
         1. **Business Understanding** - Analisis kebutuhan sistem kompensasi
         2. **Data Understanding** - EDA dataset dengan 250K+ records
@@ -336,7 +348,7 @@ elif menu == "ℹ️ Dokumentasi":
 
     with tab2:
         st.markdown(f"""
-        ### 🤖 Model yang Digunakan
+        ### Model yang Digunakan
 
         | Model | Tujuan | Performa |
         |-------|--------|----------|
@@ -347,7 +359,7 @@ elif menu == "ℹ️ Dokumentasi":
 
     with tab3:
         st.markdown(f"""
-        ### 📊 Dataset
+        ### Dataset
 
         - **Total Records**: {len(df_raw):,}
         - **Features**: 10 variabel (6 kategorikal, 4 numerik)
