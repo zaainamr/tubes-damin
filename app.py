@@ -8,13 +8,14 @@ import plotly.express as px
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler, OrdinalEncoder
+from sklearn.preprocessing import StandardScaler, OrdinalEncoder
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.cluster import KMeans
 from sklearn.metrics import (accuracy_score, precision_score, recall_score,
-                             f1_score, confusion_matrix, classification_report)
+                             f1_score, confusion_matrix, classification_report, roc_curve, auc)
+import plotly.graph_objects as go
 import kagglehub
 import warnings
 warnings.filterwarnings('ignore')
@@ -159,6 +160,10 @@ def load_and_preprocess_data():
 # Load data
 df_raw, df_processed, scaler_obj, ordinal_enc_obj = load_and_preprocess_data()
 
+# Kolom numerik yang menggunakan StandardScaler — dipakai di tab_single & tab_batch
+NUMERICAL_COLS_TO_SCALE = ['experience_years', 'skills_count', 'certifications',
+                           'education_level', 'company_size']
+
 # ============================================================================
 # TRAIN MODELS
 # ============================================================================
@@ -213,16 +218,18 @@ def train_all_models(_df_raw, _df_processed):
     model_nb = GaussianNB()
     model_nb.fit(X_train, y_train_cluster)
 
-    # ========== MODEL 5 (BONUS): Random Forest (Klasifikasi Cluster) ==========
-    model_rf_kelas = RandomForestClassifier(n_estimators=100, max_depth=15, random_state=42, n_jobs=-1)
-    model_rf_kelas.fit(X_train, y_train_cluster)
-
     # ========== EVALUASI SEMUA MODEL KLASIFIKASI ==========
     clf_models = {
         'Logistic Regression': model_logreg,
         'Naïve Bayes': model_nb,
-        'Random Forest': model_rf_kelas
+        'Random Forest': model_rf_cluster
     }
+
+    # Compute dynamic cluster labels for classification report
+    _cluster_exp = df_raw_local.groupby('cluster')['experience_years'].mean().sort_values()
+    _cluster_mapping = {cid: rank for rank, cid in enumerate(_cluster_exp.index)}
+    _cluster_names = {0: "Junior", 1: "Senior"}
+    _ordered_labels = [_cluster_names[_cluster_mapping[i]] for i in sorted(_cluster_mapping.keys())]
 
     metrics = {}
     conf_matrices = {}
@@ -237,15 +244,30 @@ def train_all_models(_df_raw, _df_processed):
         }
         conf_matrices[name] = confusion_matrix(y_test_cluster, y_pred)
         class_reports[name] = classification_report(
-            y_test_cluster, y_pred, target_names=["Junior", "Senior"], output_dict=True
+            y_test_cluster, y_pred, target_names=_ordered_labels, output_dict=True
         )
+
+    # Calculate ROC Data for Supervised Evaluation
+    roc_data = {}
+    for name, model in clf_models.items():
+        if hasattr(model, "predict_proba"):
+            y_prob = model.predict_proba(X_test)[:, 1]
+            fpr, tpr, _ = roc_curve(y_test_cluster, y_prob)
+            roc_data[name] = {'fpr': fpr, 'tpr': tpr, 'auc': auc(fpr, tpr)}
+
+    # Calculate Elbow Data for Unsupervised Evaluation
+    elbow_inertia = []
+    for k in range(1, 9):
+        km = KMeans(n_clusters=k, random_state=42, n_init=5)
+        km.fit(X_cluster_scaled)
+        elbow_inertia.append(km.inertia_)
 
     return {
         'kmeans': kmeans_model, 'scaler_cluster': scaler_cluster,
         'model_lr_regress': model_lr_regress, 'model_rf_cluster': model_rf_cluster,
         'lr_r2_train': lr_r2_train, 'lr_r2_test': lr_r2_test,
-        'model_logreg': model_logreg, 'model_nb': model_nb, 'model_rf_kelas': model_rf_kelas,
-        'metrics': metrics,
+        'model_logreg': model_logreg, 'model_nb': model_nb,
+        'metrics': metrics, 'roc_data': roc_data, 'elbow_inertia': elbow_inertia,
         'conf_matrices': conf_matrices, 'class_reports': class_reports,
         'y_test_cluster': y_test_cluster, 'X_test': X_test,
         'train_size': len(train_idx), 'test_size': len(test_idx),
@@ -261,7 +283,6 @@ model_lr_regress = results['model_lr_regress']
 model_rf_cluster = results['model_rf_cluster']
 model_logreg = results['model_logreg']
 model_nb = results['model_nb']
-model_rf_kelas = results['model_rf_kelas']
 df_with_clusters = results['df_raw']
 
 # Calculate cluster mapping dynamically
@@ -271,6 +292,8 @@ cluster_names = {
     0: "Junior",
     1: "Senior"
 }
+# Label urut berdasarkan cluster ID asli (untuk confusion matrix & classification report)
+ordered_labels = [cluster_names[cluster_mapping[i]] for i in sorted(cluster_mapping.keys())]
 
 # ============================================================================
 # SIDEBAR NAVIGATION
@@ -402,6 +425,22 @@ elif menu == "Analisis Data":
         st.plotly_chart(fig_pie, use_container_width=True)
 
     st.divider()
+    st.subheader("Korelasi Antar Variabel (Heatmap)")
+    st.markdown("Mengukur kekuatan hubungan linier antar variabel numerik. Semakin mendekati 1 (atau -1), semakin kuat hubungannya.")
+    
+    corr_cols = ['experience_years', 'skills_count', 'certifications', 'salary']
+    corr_matrix = df_raw[corr_cols].corr().round(2)
+    # Ubah nama kolom agar rapi
+    corr_matrix.columns = corr_matrix.columns.str.replace('_', ' ').str.title()
+    corr_matrix.index = corr_matrix.index.str.replace('_', ' ').str.title()
+    
+    fig_corr = px.imshow(corr_matrix, text_auto=True, aspect="auto", 
+                         color_continuous_scale='RdBu_r', 
+                         title="Heatmap Korelasi Pearson")
+    fig_corr.update_layout(margin=dict(l=20, r=20, t=40, b=20))
+    st.plotly_chart(fig_corr, use_container_width=True)
+
+    st.divider()
     st.subheader("Statistik Deskriptif")
 
     tab1, tab2 = st.tabs(["Variabel Numerik", "Variabel Kategorikal"])
@@ -440,6 +479,18 @@ elif menu == "Clustering":
         with [col1, col2][rank]:
             st.metric(cluster_names[rank], f"{cluster_size:,} Karyawan", f"Avg: {format_currency(avg_salary, global_kurs, global_periode, global_currency_arg)}", help=f"Karyawan di kelas {cluster_names[rank]}")
             st.caption(f"Pengalaman rata-rata: {avg_exp:.1f} tahun")
+
+    st.divider()
+    st.subheader("Evaluasi K-Means: Elbow Method")
+    st.markdown("Grafik ini membuktikan secara matematis mengapa kita memilih **K=2** (Junior & Senior). Siku (*elbow*) yang terbentuk pada K=2 menunjukkan bahwa penambahan cluster ketiga tidak lagi memberikan penurunan *error* (Inertia) yang signifikan.")
+    
+    elbow_df = pd.DataFrame({'K': range(1, 9), 'Inertia': results['elbow_inertia']})
+    fig_elbow = px.line(elbow_df, x='K', y='Inertia', markers=True, 
+                        title="Metode Elbow untuk Optimasi Jumlah Cluster")
+    # Add vertical line at K=2
+    fig_elbow.add_vline(x=2, line_dash="dash", line_color="red", annotation_text="Titik Siku (K=2)")
+    fig_elbow.update_layout(template="plotly_white", margin=dict(l=20, r=20, t=40, b=20))
+    st.plotly_chart(fig_elbow, use_container_width=True)
 
     st.divider()
     st.subheader("Visualisasi Cluster Interaktif")
@@ -519,12 +570,13 @@ elif menu == "Perbandingan Model":
             st.markdown(f"**{name}**")
             fig, ax = plt.subplots(figsize=(4, 3))
             sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                        xticklabels=["Junior", "Senior"], 
-                        yticklabels=["Junior", "Senior"],
+                        xticklabels=ordered_labels, 
+                        yticklabels=ordered_labels,
                         cbar=False, ax=ax)
             ax.set_xlabel('Prediksi')
             ax.set_ylabel('Aktual')
             st.pyplot(fig, use_container_width=True)
+    st.caption("Catatan: Distribusi diagonal utama merepresentasikan tingkat akurasi prediksi (*True Positives/Negatives*), sedangkan sel lainnya menunjukkan tingkat misklasifikasi.")
 
     # --- Per-Class Report ---
     st.divider()
@@ -533,7 +585,7 @@ elif menu == "Perbandingan Model":
     report = results['class_reports'][report_model]
     report_df = pd.DataFrame({
         k: v for k, v in report.items()
-        if k in ["Junior", "Senior"]
+        if k in ordered_labels
     }).T.round(4)
     st.dataframe(report_df, use_container_width=True)
 
@@ -542,7 +594,7 @@ elif menu == "Perbandingan Model":
     st.subheader("Faktor Penentu (Feature Importance)")
     st.markdown("Analisis seberapa besar pengaruh setiap atribut data terhadap penentuan level karyawan (berdasarkan bobot dari *Random Forest*).")
     
-    rf_model = results['model_rf_kelas']
+    rf_model = results['model_rf_cluster']
     feature_names = results['X_test'].columns.str.replace('_', ' ').str.title()
     importances = rf_model.feature_importances_
     
@@ -556,6 +608,25 @@ elif menu == "Perbandingan Model":
                       color='Tingkat Pengaruh', color_continuous_scale='Blues')
     fig_feat.update_layout(template="plotly_white", margin=dict(l=20, r=20, t=40, b=20), showlegend=False)
     st.plotly_chart(fig_feat, use_container_width=True)
+    st.caption("Catatan: Atribut dengan nilai importance tertinggi memiliki kontribusi paling signifikan dalam pembentukan pola keputusan (*decision boundaries*) pada model.")
+
+    # --- ROC Curve ---
+    st.divider()
+    st.subheader("Kurva ROC & AUC (Evaluasi Supervised)")
+    st.markdown("Kurva ROC (*Receiver Operating Characteristic*) menunjukkan seberapa kuat model membedakan kelas Junior dan Senior. Semakin kurva mendekati sudut kiri atas (AUC mendekati 1.0), semakin sempurna model tersebut.")
+    
+    fig_roc = go.Figure()
+    for name, data in results['roc_data'].items():
+        fig_roc.add_trace(go.Scatter(x=data['fpr'], y=data['tpr'], mode='lines', 
+                                     name=f"{name} (AUC = {data['auc']:.2f})"))
+    
+    # Add random guess line
+    fig_roc.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode='lines', line=dict(dash='dash', color='grey'), name='Tebakan Acak'))
+    fig_roc.update_layout(title="ROC Curve - Perbandingan Model Klasifikasi", 
+                          xaxis_title="False Positive Rate", yaxis_title="True Positive Rate",
+                          template="plotly_white", margin=dict(l=20, r=20, t=40, b=20))
+    st.plotly_chart(fig_roc, use_container_width=True)
+    st.caption("Catatan: Kurva yang mendekati sudut kiri atas mengindikasikan rasio klasifikasi benar (*TPR*) yang tinggi dengan error (*FPR*) yang rendah. Garis putus-putus adalah batas tebakan acak (AUC=0.50).")
 
     # --- Kesimpulan ---
     st.divider()
@@ -588,6 +659,7 @@ elif menu == "Simulator Prediksi":
 
             with col2:
                 skills = st.number_input("Jumlah Skills", 1, 20, 5, help="Jumlah keahlian teknis (tools/bahasa pemrograman) yang dikuasai.")
+                certifications = st.number_input("Jumlah Sertifikasi", 0, 10, 1, help="Total sertifikasi profesional yang dimiliki.")
                 industry = st.selectbox("Industri", sorted(df_raw['industry'].unique()), help="Sektor industri tempat perusahaan beroperasi.")
                 company_size = st.selectbox("Ukuran Perusahaan", ['Startup', 'Small', 'Medium', 'Large', 'Enterprise'], help="Kategori ukuran perusahaan.")
 
@@ -609,11 +681,11 @@ elif menu == "Simulator Prediksi":
                 'experience_years': [experience],
                 'education_level': [education],
                 'skills_count': [skills],
+                'certifications': [certifications],
                 'industry': [industry],
                 'company_size': [company_size],
                 'location': [df_raw['location'].mode()[0]],
-                'remote_work': [df_raw['remote_work'].mode()[0]],
-                'certifications': [skills // 2]
+                'remote_work': [df_raw['remote_work'].mode()[0]]
             })
 
             # Preprocessing
@@ -621,9 +693,7 @@ elif menu == "Simulator Prediksi":
                 input_data[['education_level', 'company_size']]
             )
 
-            numerical_cols_to_scale = ['experience_years', 'skills_count', 'certifications',
-                                       'education_level', 'company_size']
-            input_data[numerical_cols_to_scale] = scaler_obj.transform(input_data[numerical_cols_to_scale])
+            input_data[NUMERICAL_COLS_TO_SCALE] = scaler_obj.transform(input_data[NUMERICAL_COLS_TO_SCALE])
 
             input_processed = pd.get_dummies(input_data, columns=['job_title', 'industry', 'location', 'remote_work'],
                                             drop_first=True, dtype=int)
@@ -659,7 +729,7 @@ elif menu == "Simulator Prediksi":
             clf_models_map = {
                 'Logistic Regression': model_logreg,
                 'Naïve Bayes': model_nb,
-                'Random Forest': model_rf_kelas
+                'Random Forest': model_rf_cluster
             }
 
             if clf_choice == "Bandingkan Semua":
@@ -695,7 +765,7 @@ elif menu == "Simulator Prediksi":
     with tab_batch:
         st.subheader("Upload Data Karyawan")
         st.markdown("Unggah file CSV yang berisi sekumpulan data calon karyawan.")
-        st.info("Format kolom yang wajib ada: `job_title`, `experience_years`, `education_level`, `skills_count`, `industry`, `company_size`. Kolom lain akan diisi otomatis menggunakan data modus (mayoritas).")
+        st.info("Format kolom yang wajib ada: `job_title`, `experience_years`, `education_level`, `skills_count`, `certifications`, `industry`, `company_size`. Kolom lain akan diisi otomatis menggunakan data modus (mayoritas).")
         
         uploaded_file = st.file_uploader("Pilih file CSV", type=["csv"])
         if uploaded_file is not None:
@@ -713,16 +783,16 @@ elif menu == "Simulator Prediksi":
                         # Missing columns
                         if 'location' not in batch_input: batch_input['location'] = df_raw['location'].mode()[0]
                         if 'remote_work' not in batch_input: batch_input['remote_work'] = df_raw['remote_work'].mode()[0]
-                        if 'certifications' not in batch_input: batch_input['certifications'] = batch_input['skills_count'] // 2
+                        if 'certifications' not in batch_input: batch_input['certifications'] = batch_input['skills_count'] // 2 # Fallback
                         
                         # Encode
                         batch_input[['education_level', 'company_size']] = ordinal_enc_obj.transform(
                             batch_input[['education_level', 'company_size']]
                         )
-                        batch_input[numerical_cols_to_scale] = scaler_obj.transform(batch_input[numerical_cols_to_scale])
+                        batch_input[NUMERICAL_COLS_TO_SCALE] = scaler_obj.transform(batch_input[NUMERICAL_COLS_TO_SCALE])
                         
                         # Dummies
-                        batch_processed = pd.get_dummies(batch_input, columns=['job_title', 'industry', 'location', 'remote_work'], drop_first=False, dtype=int)
+                        batch_processed = pd.get_dummies(batch_input, columns=['job_title', 'industry', 'location', 'remote_work'], drop_first=True, dtype=int)
                         
                         # Align columns with training data
                         for col in df_processed.columns:
