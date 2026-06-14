@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
-import pickle
 import time
 import plotly.express as px
 import matplotlib.pyplot as plt
@@ -225,12 +224,6 @@ def train_all_models(_df_raw, _df_processed):
         'Random Forest': model_rf_cluster
     }
 
-    # Compute dynamic cluster labels for classification report
-    _cluster_exp = df_raw_local.groupby('cluster')['experience_years'].mean().sort_values()
-    _cluster_mapping = {cid: rank for rank, cid in enumerate(_cluster_exp.index)}
-    _cluster_names = {0: "Junior", 1: "Senior"}
-    _ordered_labels = [_cluster_names[_cluster_mapping[i]] for i in sorted(_cluster_mapping.keys())]
-
     metrics = {}
     conf_matrices = {}
     class_reports = {}
@@ -244,7 +237,7 @@ def train_all_models(_df_raw, _df_processed):
         }
         conf_matrices[name] = confusion_matrix(y_test_cluster, y_pred)
         class_reports[name] = classification_report(
-            y_test_cluster, y_pred, target_names=_ordered_labels, output_dict=True
+            y_test_cluster, y_pred, output_dict=True
         )
 
     # Calculate ROC Data for Supervised Evaluation
@@ -294,6 +287,18 @@ cluster_names = {
 }
 # Label urut berdasarkan cluster ID asli (untuk confusion matrix & classification report)
 ordered_labels = [cluster_names[cluster_mapping[i]] for i in sorted(cluster_mapping.keys())]
+
+# Remap classification report keys dari angka (0/1) ke label (Junior/Senior)
+class_reports_mapped = {}
+for model_name, report in results['class_reports'].items():
+    mapped = {}
+    for key, val in report.items():
+        if key in ['0', '1']:
+            mapped[cluster_names[cluster_mapping[int(key)]]] = val
+        else:
+            mapped[key] = val
+    class_reports_mapped[model_name] = mapped
+results['class_reports'] = class_reports_mapped
 
 # ============================================================================
 # SIDEBAR NAVIGATION
